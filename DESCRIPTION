@@ -30,5 +30,5 @@ Suggests:
     knitr,
     rmarkdown
 VignetteBuilder: knitr
-URL: https://github.com/AcidyBee/mapuce
+URL: https://github.com/AcidyBee/mapuce, https://acidybee.github.io/mapuce/
 BugReports: https://github.com/AcidyBee/mapuce/issues

@@ -6,3 +6,7 @@
 ^dev$             # /dev/: Holds internal tools, demo apps, and experimental modules.
 ^dev/.*
 ^README\.Rmd$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^\.github$
