@@ -1,0 +1,49 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# mapuce
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+The goal of mapuce is to Convert RP INDCVI detail files to semantic data input for MAPUCE models.
+
+The mapuce package contains a set of functions to check, extract and transform variables from the RP INDCVI detail files from the french census, in order to prepare them for mapuce models.
+
+## Installation
+
+This package is not available on CRAN, to install it please use the following commands:
+
+From GitHub:
+
+``` r
+remotes::install_github("AcidyBee/mapuce")
+```
+
+## Example
+
+This is a basic example which shows you how to solve a common problem:
+
+```{r example}
+library(mapuce)
+## basic example code
+```
+
+You can describe model modalities using the following command:
+
+```{r model_eq}
+describe_model_modalities(model_eq)
+```
+

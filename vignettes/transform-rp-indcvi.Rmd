@@ -1,0 +1,201 @@
+---
+title: "transform-rp-indcvi"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{transform-rp-indcvi}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(mapuce)
+```
+
+## Etape préliminaire spécifique: SURF
+
+Conversion de SURF vers le millesime 2011.
+
+La forme de la variable SURF a pu évoluer au cours des différents millésime. Pour l'application des modèles, il faut nécessairement revenir à la forme RP INDCVI 2011, c'est ce que fait la fonction `convert_rp_indcvi_levels_2016_to_2011()`
+
+```{r}
+convert_rp_indcvi_levels_2016_to_2011(rp_indcvi_sampled_2016)
+```
+
+## Suppression des observations non-prise en compte dans les modèles
+
+Outre les modalités X, Z, 00 et ZZ éliminées de fait lors de l'extraction, certaines modalités ne sont pas prises en compte dans les modèles (cf. `check-models-requirements` et la section de création de `typl_ma`), notamment le type de logement TYPL qui ne prend en compte que les niveaux 1 et 2. Pour ne pas appliquer les modèles sur des observations incomplètes, on préférera appliquer une élimination explicite via la fonction `drop_na_levels_for_mapuce`.
+
+```{r}
+rp_indcvi_sampled_2011 %>% 
+  # drop_na_levels_for_mapuce() %>% 
+  dplyr::select(!1:6) %>% # élimination de l'affichage pour les variables géo et nummi et ipondi
+  dplyr::mutate(dplyr::across(dplyr::where(is.character), factor)) %>% 
+  describe_data_modalities()
+```
+
+Elimination explicite des levels non-pris en compte dans les modeles.
+
+```{r}
+rp_indcvi_sampled_2011 %>% 
+  drop_na_levels_for_mapuce() %>%
+  dplyr::select(!1:6) %>% # élimination de l'affichage pour les variables géo et nummi et ipondi
+  dplyr::mutate(dplyr::across(dplyr::where(is.character), factor)) %>% 
+  describe_data_modalities()
+```
+
+## Augment
+
+### typl_ma
+
+TYPL: type de logement en 6 classes
+
+typl_ma: type de logement réduit à 2 classes:  
+ - "1": "maison"
+ - "2": "appartement"
+ 
+Note 2024-12-28: dans les modèles de mapuce, on ne prend en compte que les 2 premiers types de logement (maison ou appartement), les autres (minoritaires, environ 1%) doivent être filtrés via la fonction `drop_na_levels_for_mapuce` pour éliminer les données correspondantes.
+
+```{r}
+augment_rp_indcvi_typl_ma(rp_indcvi_sampled_2011) %>%
+  with(table(TYPL, typl_ma, useNA = "ifany"))
+```
+
+### chfl_3g
+
+CHFL: Chauffage central du logement (France métropolitaine): en 4 classes
+
+chfl_3g: type de chauffage réduit à 2 classes:  
+ - "collectif"
+ - "electricite"
+ - "autres"
+
+```{r}
+augment_rp_indcvi_chfl_3g(rp_indcvi_sampled_2011) %>%
+  with(table(CHFL, chfl_3g, useNA = "ifany"))
+```
+
+### cmbl_cre
+
+CMBL: Combustible principal du logement (France métropolitaine)
+
+cmbl_cre: type de chauffage réduit à 3 classes:  
+ - "electricite"
+ - "gaz bouteille ou citerne"
+ - "autres"
+
+```{r}
+augment_rp_indcvi_cmbl_cre(rp_indcvi_sampled_2011) %>%
+  with(table(CMBL, cmbl_cre, useNA = "ifany"))
+```
+
+### nbpi_cont (variable intermédiaire)
+
+NBPI: Nombre de pieces en 20 classes
+
+nbpi_cont: Nombre de pieces en continu: la modalité 20 et + est transformée en 20.
+
+```{r}
+augment_rp_indcvi_nbpi_cont(rp_indcvi_sampled_2011) %>%
+  with(table(NBPI, nbpi_cont, useNA = "ifany"))
+```
+
+### surf_6g_cont
+
+Séparation de la superficie du logement en 6 groupes à partir de la composition des variables `SURF` et `nbpi_cont`: la variable est de type numeric. Cette séparation permet de se rapprocher de la variable SURF en 7 groupes que l'insee utilise normalement sauf pour le millésime 2011 :(
+
+```{r}
+rp_indcvi_sampled_2011 %>%
+  augment_rp_indcvi_nbpi_cont %>%
+  augment_rp_indcvi_surf_6g_cont() %>%
+  with(table(SURF, surf_6g_cont, useNA = "ifany"))
+```
+
+### surf_nbpi_4g
+
+Séparation de la superficie du logement en 4 groupes à partir de la composition des variables `SURF` et `nbpi_cont`: la variable est de type factor.
+
+```{r}
+rp_indcvi_sampled_2011 %>%
+  augment_rp_indcvi_nbpi_cont %>%
+  augment_rp_indcvi_surf_nbpi_4g() %>%
+  with(table(SURF, surf_nbpi_4g, useNA = "ifany"))
+```
+
+### nperr en 3 classes: 1, 2, 3 ou +
+
+nperr en 3 classes: 1, 2, 3 ou + à partir de 
+
+NPERR: Nombre de personnes du ménage (regroupé):
+
+- 1 : Une personne
+- 2 : 2 personnes
+- 3 : 3 personnes
+- 4 : 4 personnes
+- 5 : 5 personnes
+- 6 : 6 personnes ou plus
+- Z : Hors logement ordinaire
+
+Note: Les modalités 6 ou plus sont regroupées: autant garder la variable INPER
+
+```{r}
+rp_indcvi_sampled_2011 %>%
+  augment_rp_indcvi_nperr_123() %>%
+  with(table(NPERR, nperr_123, useNA = "ifany"))
+```
+
+### stocd_2g
+
+Statut d'occupation modifié (en 2 postes): proprietaires / autres
+
+```{r}
+rp_indcvi_sampled_2011 %>%
+  augment_rp_indcvi_stocd_2g() %>%
+  with(table(STOCD, stocd_2g, useNA = "ifany"))
+```
+
+### pipeline de tous les augment
+
+Un pipeline de tous les augment est réalisé via la fonction `augment_rp_indcvi_for_mapuce()`.
+
+```{r}
+augment_rp_indcvi_for_mapuce(rp_indcvi_sampled_2011)
+```
+
+## Recode
+
+Une fois le dataset augmenté, une étape de recodage des variables est nécessaire pour correspondre à celles utilisées par les modèles.
+
+```{r}
+rp_indcvi_sampled_2011 %>%
+  augment_rp_indcvi_for_mapuce() %>%
+  recode_rp_indcvi_for_mapuce()
+```
+
+## Pipeline de transformation du dataset
+
+Le pipeline pour le rp indcvi est donné par la fonction `transform_rp_indcvi_to_mapuce()`. Il doit être précédé du recodage de SURF pour les millésimes ne contenant pas les mêmes modalités que le millésime 2011. Il effectue séquentiellement les 3 étapes suivantes:
+
+- suppression des lignes contenant les modalités non-utilisées dans les modèles MAPUCE (principalement Z, X, etc., mais aussi l'exclusion des modalités autres que 1 et 2 pour typl: maison ou appartement).
+- augmentation du datasets avec les nouvelles variables intermédiaires utilisées par les modèles
+- recodage des variables avec les modalités utilisées par les modèles + suppression des colonnes devenues inutiles aux modèles
+
+Le pipeline de transformation: ne gère pas la transformation des SURF vers le millésime 2011 (ce sera fait dans la dernière étape de préparation des fichiers).
+
+```{r}
+transform_rp_indcvi_to_mapuce(rp_indcvi_sampled_2011)
+```
+
+Pour le millesime 2020:
+
+```{r}
+rp_indcvi_2020_zoneA <- extract_rp_indcvi_for_mapuce(insee.rp.data.2020::path_to_extdata("RP-detail/INDCVI/FD_INDCVIZA_2020.csv"))
+transform_rp_indcvi_to_mapuce(rp_indcvi_2020_zoneA)
+```
+

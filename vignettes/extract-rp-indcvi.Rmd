@@ -1,0 +1,137 @@
+---
+title: "extract-rp-indcvi"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{extract-rp-indcvi}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(mapuce)
+library(dplyr)
+```
+
+## Extraction
+
+La fonction `extract_rp_indcvi_for_mapuce()` permet de créer une extraction du RP INDCVI qui possède les variables nécessaires aux calculs des modèles MAPUCE et de leur agrégation, ainsi qu'au positionnement géographique des observations. Une nouvelle fonction unifiée a été crée dans le package `insee.rp`: `insee.rp::ins_extract_rp_col`.
+
+### Variables à extraire
+
+Les variables à extraire ainsi que leur type sont crées dans le fichier `data-raw/sysdata.R`, puis stockées en tant que: `vars_rp_indcvi_for_mapuce_names` & `vars_rp_indcvi_for_mapuce_types` dans le fichier `R/sysdata.rda`
+
+```{r}
+vars_rp_indcvi_for_mapuce_names
+# # variable interne au package, non-accesssible dans les vignettes # maj 2025-04-03: les variables sont rendues accessibles
+# c("IRIS", "CATIRIS", "CANTVILLE", "ARM", "NUMMI", "IPONDI", "TYPL", 
+# "CHFL", "CMBL", "SURF", "NBPI", "AGEREV", "INPER", "NPERR", "COUPLE", 
+# "STOCD", "LPRM", "METRODOM")
+```
+
+```{r}
+## Test avec le millésime 2020 zone A:
+# ?insee.rp::ins_extract_rp_col
+path_to_indcvi <- insee.rp.data.2020::path_to_extdata("RP-detail/INDCVI/FD_INDCVIZA_2020.csv")
+rp_indcvi_2020_zoneA <- extract_rp_indcvi_for_mapuce(path_to_indcvi)
+```
+
+### Extraction par défaut
+
+L'extraction est automatisée avec la fonction `extract_rp_indcvi_for_mapuce()`. Cette fonction réalise les étapes suivantes:
+
+- importation des variables d'intérêt données dans `vars_rp_indcvi_for_mapuce_names`, avec unification des noms pour les varaibles géographiques (package `insee.rp`)
+- élimination de toutes les lignes qui ne correspondent pas à la métropole, et à la personne de référence du ménage
+- élimination des colonnes métropole et personne de référence du ménage (qui ne possèdent plus de variabilité)
+- conversion spécifique de IPONDI (poids de l'observation), dont le format a pu changer au cours des millésimes (notamment 2011)
+
+```{r}
+path_to_indcvi_2016_zoneA <- insee.rp.data.2016::path_to_extdata("RP-detail/INDCVI/FD_INDCVIZA_2016.csv")
+(rp_incvi_2016_zoneA <- extract_rp_indcvi_for_mapuce(path_to_indcvi_2016_zoneA))
+```
+
+## Check
+
+Le calcul des modèles MAPUCE demande la création de nouvelles variables à partir des variables de base importées. Le type des variables est géré lors de l'étape d'extraction précédente, mais le codage des variables de base de l'INSEE a pu changer au cours des différents millésime; et notamment en 2011 au moment de la création des modèles. Il faut donc vérifier que les modalités des différentes variables ont bien la forme attendue par les modèles, et les fonction de préparation des données intermédiaires.
+
+Comparaison des modalités par rapport à celles attendues par les modèles. 2 extraits des RP INDCVI ont été créés pour les millésimes 2011 (millésime de référence sur lequel on été créés les modèles), et le millésime 2016 & 2020 (qui montrent les mêmes modalités pour les variables).
+
+Note: les variables géographiques sont exclues du check...
+
+### Vérification millésime 2011
+
+Pour le millésime 2011 certaines modalités ne sont pas observées dans notre échantillon aléatoire de 1000 observations. On constate essentiellement les modalités suivantes X, Z et ZZ qui sont éliminées lorsque nous n'avons retenu que la métropole et la personne de référence du ménage.
+
+Pour CHFL et CMBL:  
+- X : Hors logement ordinaire (DOM et France métropolitaine)
+- Z : Logement ordinaire DOM
+
+Pour TYPL, SURF et NPERR:  
+- Z : Hors logement ordinaire
+
+Pour STOCD:  
+- 00 : Logement ordinaire inoccupé
+- ZZ : Hors logement ordinaire
+
+```{r}
+check_rp_indcvi_2011_levels_for_mapuce(rp_indcvi_sampled_2011)
+```
+
+A part le niveau 4 de TYPL qui n'a probablement pas été échantillonné, les autres modalités sont exclues et n'ont pas tellement d'intérêt pour la comparaison. Création d'une fonction qui exclu ces modalités.
+
+Après exclusion des modalités non-informatives, seul la modalité non-échantillonnée apparaît, c'est plus lisible.
+
+```{r}
+check_rp_indcvi_2011_levels_for_mapuce_restricted(rp_indcvi_sampled_2011)
+```
+
+### Vérification millésime 2016
+
+Les mêmes modalités que pour le millésime 2011 sont relevées (celles-ci ne sont pas très intéressantes pour la comparaison), mais il y a également de nouvelles modalités pour la surface:
+
+- il y a les modalités 4, 5, 6, 7 en plus des 1, 2, 3 attendus dans le millésime 2011:
+
+```{r}
+check_rp_indcvi_2011_levels_for_mapuce_restricted(rp_indcvi_sampled_2016)
+```
+
+Une fonction de conversion a été crée dans le but de se ramener aux variables des modèles 2011.
+
+Seuls les niveaux de SURF qui ne sont pas dans le millésime 2011 ressortent si on utilise toute la zone A, plutôt qu'un échantillon de 1000 lignes...
+
+```{r}
+check_rp_indcvi_2011_levels_for_mapuce_restricted(rp_incvi_2016_zoneA)
+```
+
+### Vérification millésime 2020
+
+Les mêmes modalités que pour le millésime 2011 sont relevées (celles-ci ne sont pas très intéressantes pour la comparaison), mais il y a également de nouvelles modalités pour la surface: les mêmes que pour le millésime 2016.
+
+- il y a les modalités 4, 5, 6, 7 en plus des 1, 2, 3 attendus dans le millésime 2011:
+
+```{r}
+# rp_indcvi_2020_zoneA <- extract_rp_indcvi_for_mapuce(insee.rp.data.2020::path_to_extdata("RP-detail/INDCVI/FD_INDCVIZA_2020.csv"))
+check_rp_indcvi_2011_levels_for_mapuce_restricted(rp_indcvi_2020_zoneA)
+```
+
+<!-- Note: la fonction `extract_rp_indcvi_for_mapuce` fait maintenant appel à la fonction générale `insee.rp::ins_extract_rp_col`. -->
+
+<!-- Test avec la méthode d'extraction du package insee.rp. Attention: tout devient lowercase, pas seulement les variables geo. Il faut modifier la fonction du package insee.rp. -->
+
+<!-- ```{r} -->
+<!-- rp_indcvi_2020_zoneA_new <- insee.rp::ins_extract_rp_col( -->
+<!--   file = insee.rp.data.2020::path_to_extdata("RP-detail/INDCVI/FD_INDCVIZA_2020.csv"),  -->
+<!--   col_select = vars_rp_indcvi_for_mapuce_names, col_types = vars_rp_indcvi_to_import_types) -->
+<!-- check_rp_indcvi_2011_levels_for_mapuce(rp_indcvi_2020_zoneA_new) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- check_rp_indcvi_2011_levels_for_mapuce_restricted(rp_indcvi_2020_zoneA_new) -->
+<!-- ``` -->
+

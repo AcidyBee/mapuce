@@ -1,0 +1,57 @@
+---
+title: "check-models-requirements"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{check-models-requirements}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(mapuce)
+library(purrr)
+library(dplyr)
+```
+
+Les variables nécessaires aux calculs des modèles et leurs modalités attendues sont obtenues avec une instruction du type `model$data`.
+
+## cre
+
+```{r}
+describe_model_modalities(model_cre)
+```
+
+## eq
+
+```{r}
+describe_model_modalities(model_eq)
+```
+
+## eq_surf
+
+```{r}
+describe_model_modalities(model_eq_surf)
+```
+
+## iu
+
+```{r}
+describe_model_modalities(model_iu)
+```
+
+## les 4 comportements
+
+```{r}
+purrr::map_dfr(
+  list(model_cre, model_eq, model_eq_surf, model_iu), 
+  describe_model_modalities) %>% 
+  dplyr::distinct(var_code, levels, range)
+```
+

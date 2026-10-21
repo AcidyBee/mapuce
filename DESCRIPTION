@@ -1,0 +1,34 @@
+Package: mapuce
+Title: Convert RP INDCVI detail files to semantic data input for MAPUCE models
+Version: 0.0.0.9000
+Authors@R: 
+    person("Alexis", "Bourgeois", , "acidybee@proton.me", role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0009-8513-1715"))
+Description: The mapuce package contains a set of functions to check, extract and transform variables from the RP indcvi file from the french census, in order to prepare them for mapuce models.
+License: MIT + file LICENSE
+Depends: 
+    R (>= 3.5)
+Imports: 
+    cleanser,
+    data.table,
+    dplyr (>= 1.1.1),
+    insee.rp,
+    magrittr,
+    purrr (>= 1.0.0),
+    stringr,
+    tibble
+Encoding: UTF-8
+LazyData: true
+LazyDataCompression: bzip2
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Suggests: 
+    ggplot2,
+    insee.admin.data.2022,
+    insee.rp.data.2016,
+    insee.rp.data.2020,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+URL: https://github.com/AcidyBee/mapuce
+BugReports: https://github.com/AcidyBee/mapuce/issues

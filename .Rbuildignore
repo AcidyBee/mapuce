@@ -1,0 +1,8 @@
+^mapuce\.Rproj$
+^\.Rproj\.user$
+^devtools_history\.R$
+^LICENSE\.md$
+^data-raw$
+^dev$             # /dev/: Holds internal tools, demo apps, and experimental modules.
+^dev/.*
+^README\.Rmd$

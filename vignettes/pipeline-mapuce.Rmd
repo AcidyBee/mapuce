@@ -1,0 +1,392 @@
+---
+title: "pipeline-mapuce"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{pipeline-mapuce}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(mapuce)
+library(dplyr)
+```
+
+
+En suivant les étapes de la présente vignette, il est maintenant possible de générer un nouveau fichier mapuce pour les différents millésimes rp indcvi. On peut créer des packages de données MAPUCE pour chaque millésime, en les combinant aux données géographiques IGN :)
+
+
+TODO: il y a un mismatch entre le dataset issu du pipeline, et celui que l'on utilisait comme dataset de référence (cf. à la fin de la vignette). Le pipeline renvoie plus d'observations... Il faudrait trouver d'où vient le problème, s'il y en a un, peut être après la phase de mise en cohérence des données semantic et géographiques des fichiers insee.
+
+Ca peut-être du aux fichiers insee de départ: france entière puis filtre sur IdF vs fichier zone A ?
+A noter que l'ordre des colonnes n'est pas le même dans les 2 cas, il faut faire attention que ça n'influe pas les calculs au moment de l'agrégation (mais il me semble que maintenant la sélection des colonnes se fait par leur nom plutôt que selon leur position).
+
+Le NUMMI est perdu ce qui complique l'identification des observations discordantes.
+
+## Extraction du RP INDCVI
+
+Importation des variables nécessaires
+
+```{r}
+path_to_indcvi_zoneA_2016 <- insee.rp.data.2016::path_to_extdata("RP-detail/INDCVI/FD_INDCVIZA_2016.csv")
+(rp_indcvi_zoneA_2016 <- extract_rp_indcvi_for_mapuce(path_to_indcvi_zoneA_2016))
+# rp_indcvi_zoneA_2016 <- extract_rp_indcvi_for_mapuce(file = path_to_file("RP_INDCVI/FD_INDCVIZA_2016.csv"))
+names(rp_indcvi_zoneA_2016)
+```
+
+## Vérification des variables
+
+### Toutes les variables nécessaires sont bien présentes
+
+C\\'est normalement ce qui est attendu par l\\'étape d\\'extraction, les variables geographiques ont été renommées afin d\\'unifier les différents fichiers insee.
+
+```{r}
+## L'instruction ci-dessous ne peut être inclue dans la vignette car elle fait appel à une donnée interne
+# setequal(
+#   colnames(rp_indcvi_zoneA_2016), 
+#   setdiff(vars_rp_indcvi_to_import_names, c("LPRM", "METRODOM")) # les variables demandées sans c("LPRM", "METRODOM") qui ont servies à la sélection
+# )
+## Pas de message affiché: tout va bien:
+check_rp_indcvi_2011_names(rp_indcvi_sampled_2011)
+```
+
+### Les modalités des variables sont bien celles attendues
+
+On ne prend pas en compte les modalités spécifiques X, Z, ZZ, etc. éliminées lors de l'importation.
+
+Millésime 2011: une modalité n'a pas été échantillonnée sur les 1000 observations extraites pour TYPL, et pas non plus de logement plus grand que 10 pièces
+
+```{r}
+## Pas de message affiché: tout va bien:
+check_rp_indcvi_2011_levels_for_mapuce_restricted(rp_indcvi_sampled_2011)
+```
+
+Millésime 2016: La superficie regroupée n'a pas les mêmes modalités que pour le millésime 2011 !!
+
+```{r}
+## Pas de message affiché: tout va bien:
+check_rp_indcvi_2011_levels_for_mapuce_restricted(rp_indcvi_sampled_2016)
+```
+
+Pour le millésime 2016, il faut recoder `SURF` selon la forme 2011.
+
+## Conversion de SURF au format 2011
+
+Les niveaux sont bien regroupés comme attendu:
+
+```{r}
+rp_indcvi_sampled_2016 %>% 
+  dplyr::mutate(SURF_2016 = SURF) %>% 
+  convert_rp_indcvi_levels_2016_to_2011() %>% 
+  with(table(SURF, SURF_2016, useNA = "ifany"))
+```
+
+## Application du pipeline d'extraction-transformations du dataset
+
+Pipeline d\\'extraction-transformation du fichier d\\'entrée pour créer un dataset de sortie compatible avec son utilisation pour les calculs MAPUCE:
+
+1. Extraction : détail dans le fichier `02-transform-rp-indcvi` et la vignette associée.
+1.b Conversion de variables si forme différente de celle du RP INDCVI 2011
+2. Transformation : détail dans le fichier `02-transform-rp-indcvi` et la vignette associée.
+
+```{r}
+(semantic_2016_pipeline <- pipeline_rp_indcvi_2016_to_mapuce(path_to_indcvi_zoneA_2016))
+```
+
+## Comparaison au dataset de référence utilisé dans spatialxplorer v1
+
+Normalement les 2 datasets devraient être identiques, mais ce n'est pas le cas.
+
+Le dataset de réf spatialxplorer a été téléchargé au moment de la v1 de spatialxplorer (plusieurs années). Téléchargement France entière, puis restriction à l'IdF.
+
+Le dataset pipeline a été téléchargé en déc. 2024 uniquement pour la zone A (IdF), selon la procédure d'extraction et de transformation du package mapuce.
+
+```{r}
+semantic_2016_ref <- semantic_ref
+```
+
+### Dimension
+
+Fichier de référence utilisé dans spatialxplorer v1: 
+
+```{r}
+dim(semantic_2016_ref)
+```
+
+Pipeline
+
+```{r}
+dim(semantic_2016_pipeline)
+```
+
+Le dataset issu du pipeline contient plus d'observations: 15385 (environ 1%)
+
+```{r}
+NROW(semantic_2016_pipeline) - NROW(semantic_2016_ref)
+```
+
+### Noms de colonnes
+
+```{r}
+names_semantic_2016_ref <- names(semantic_2016_ref)
+names_semantic_2016_pipeline <- names(semantic_2016_pipeline)
+```
+
+Noms supplémentaires pour le pipeline: iris_type
+
+```{r}
+setdiff(names_semantic_2016_pipeline, names_semantic_2016_ref)
+```
+
+Noms supplémentaires pour le fichier de référence utilisé dans spatialxplorer v1: aucun
+
+```{r}
+setdiff(names_semantic_2016_ref, names_semantic_2016_pipeline)
+```
+
+L'identification de la plus petite entité spatiale a été réalisée.
+
+### NA
+
+Fichier de référence utilisé dans spatialxplorer v1: Strictement aucune NA.
+
+```{r}
+semantic_2016_ref %>%
+  is.na() %>%
+  colSums()
+```
+
+Pipeline:  Strictement aucune NA.
+
+```{r}
+semantic_2016_pipeline %>%
+  is.na() %>%
+  colSums()
+```
+
+### Identification des observations non-communes
+
+Le numéro de ménage n'a pas été conservé, ce qui va compliquer l'identification des observations...
+
+cv_code: pour Paris le cv_code semble avoir changé:
+
+Pour la ref:
+
+```{r}
+setdiff(unique(semantic_2016_ref$cv_code), 
+        unique(semantic_2016_pipeline$cv_code))
+```
+
+Pour le pipeline:
+
+```{r}
+setdiff(unique(semantic_2016_pipeline$cv_code),
+        unique(semantic_2016_ref$cv_code))
+```
+
+Il y a peut-être eu un soucis à l'époque avec la fonction qui automatisait le traitement des données manquantes ?
+
+Conversion du cv_code "7599" en "75ZZ" dans le dataset de ref:
+
+```{r}
+semantic_2016_ref <- semantic_2016_ref %>% 
+  dplyr::mutate(cv_code = dplyr::if_else(cv_code == "7599", "75ZZ", cv_code))
+```
+
+Identification des observations discordantes:
+
+Celles en plus dans le pipeline:
+
+```{r}
+dplyr::anti_join(semantic_2016_pipeline, semantic_2016_ref, by = c("iris_code", "cv_code")) %>% 
+  dplyr::arrange(iris_code)
+```
+
+Celles en plus dans le dataset de réf:
+
+```{r}
+dplyr::anti_join(semantic_2016_ref, semantic_2016_pipeline, by = c("iris_code", "cv_code")) %>% 
+  dplyr::arrange(iris_code)
+```
+
+Identification des observations discordantes en utilisant le atome_indcvi:
+
+Celles en plus dans le pipeline:
+
+```{r}
+(atome_indcvi_additionals <- dplyr::anti_join(semantic_2016_pipeline, semantic_2016_ref, by = c("atome_indcvi")) %>% 
+   dplyr::arrange(iris_code))
+```
+
+Tracé:
+
+```{r}
+## TODO corriger la lut: pour les communes non découpées en iris, le découpage admin complete le iris_code avec des trailling 0
+## ce qui n'est pas le cas dans le fichier indcvi
+(lut_atome_indcvi_auto <- insee.rp::ins_create_lut_atome_indcvi(
+  # insee.admin.data.2022::insee_admin_decoupage_2022 %>%
+  insee.admin.data.2022::insee_admin_decoupage %>%
+    dplyr::semi_join(semantic_2016_pipeline, by = "cv_code"),
+  semantic_2016_pipeline
+) %>% 
+  dplyr::select(dplyr::all_of(c("atome_indcvi", "iris_code"))) %>% 
+  dplyr::arrange(iris_code))
+```
+
+Augmentation plus manuelle
+
+```{r}
+(lut_atome_indcvi <- insee.rp::ins_augment_atome_indcvi(
+  # insee.admin.data.2022::insee_admin_decoupage_2022,
+  insee.admin.data.2022::insee_admin_decoupage,
+  semantic_2016_pipeline
+) %>% 
+  dplyr::select(dplyr::all_of(c("atome_indcvi", "iris_code")))) %>% 
+  dplyr::arrange(iris_code)
+```
+
+Les 2 méthodes sont-elles identiques: NON, l'une d'elle créé des valeurs manquantes ??
+
+```{r}
+all.equal(lut_atome_indcvi_auto, lut_atome_indcvi)
+```
+
+NA ? Attention à la corse qui replace le second digit de iris_code par un A ou un B...
+
+```{r}
+lut_atome_indcvi %>% 
+  dplyr::filter(is.na(atome_indcvi))
+```
+
+```{r}
+lut_atome_indcvi_auto %>% 
+  dplyr::filter(iris_code == "2A0040101")
+```
+
+Cette observation appartient-elle à indcvi ? NON, la commune est probablement non-découpée en iris, et c'est le cv_code qui devrait apparaitre. DONE (2025-04-13): correction de la condition des 9 et 5 digits pour permettre la lettre A ou B en 2nde position...
+
+```{r}
+semantic_2016_pipeline %>% 
+  dplyr::filter(stringr::str_detect(.data$iris_code, "2A004"))
+```
+
+TODO: il faut reprendre la fonction qui créé la lut, et vérifier aussi la création de atome_indcvi également dans le cas de l'augmentation... package insee.rp...
+
+
+Tracé 
+
+```{r}
+insee_spatial_2022_atome_indcvi <-
+# insee.admin.data.2022::insee_admin_spatial_2022 %>% 
+  insee.admin.data.2022::insee_admin_spatial %>% 
+  insee.rp::ins_sf_union_atome_indcvi(lut_atome_indcvi)
+```
+
+55 éléments supplémentaires pour l'ile de France
+
+```{r}
+insee_spatial_2022_atome_indcvi %>% 
+  dplyr::semi_join(atome_indcvi_additionals, by = "atome_indcvi") %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+```
+
+
+Celles en plus dans le dataset de réf:
+
+```{r}
+(atome_indcvi_missings <- dplyr::anti_join(semantic_2016_ref, semantic_2016_pipeline, by = c("atome_indcvi")) %>% 
+   dplyr::arrange(iris_code) %>% 
+   dplyr::distinct(atome_indcvi, iris_code, arm_code, cv_code))
+```
+
+Tracé: ça ressemble à des parcs et des cannaux pour ceux qui sont identifiés. On constate que lorsque le iris_code comporte 5 digits renseignés, hors Paris, c'est le cv_code qui est utilisé, et non le code commune.
+
+```{r}
+insee_spatial_2022_atome_indcvi %>% 
+  dplyr::semi_join(atome_indcvi_missings, by = "atome_indcvi") %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+```
+
+Correction de semantic_2016_ref
+
+```{r}
+semantic_2016_ref_corrected <- semantic_2016_ref %>% 
+  insee.rp::ins_augment_rp_indcvi_atome_indcvi()
+```
+
+Identification des observations discordantes en utilisant le atome_indcvi:
+
+Celles en plus dans le pipeline: 22
+
+```{r}
+(atome_indcvi_additionals <- dplyr::anti_join(semantic_2016_pipeline, semantic_2016_ref_corrected, by = c("atome_indcvi")) %>% 
+   dplyr::arrange(iris_code) %>% 
+   dplyr::distinct(atome_indcvi, iris_code, arm_code, cv_code))
+```
+
+22 éléments supplémentaires pour l'ile de France
+
+```{r}
+insee_spatial_2022_atome_indcvi %>% 
+  dplyr::semi_join(atome_indcvi_additionals, by = "atome_indcvi") %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+```
+
+Celles en plus dans le dataset de réf: il n'y en a plus que 16 sur l'IdF
+
+```{r}
+(atome_indcvi_missings <- dplyr::anti_join(semantic_2016_ref_corrected, semantic_2016_pipeline, by = c("atome_indcvi")) %>% 
+   dplyr::arrange(iris_code) %>% 
+   dplyr::distinct(atome_indcvi, iris_code, arm_code, cv_code))
+```
+
+Tracé: ça ressemble à des parcs et des cannaux pour ceux qui sont identifiés. On constate que lorsque le iris_code comporte 5 digits renseignés, hors Paris, c'est le cv_code qui est utilisé, et non le code commune.
+
+```{r}
+insee_spatial_2022_atome_indcvi %>% 
+  dplyr::semi_join(atome_indcvi_missings, by = "atome_indcvi") %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+```
+
+<!-- Identification des entités géographques non-présentes dans rp indcvi -->
+
+<!-- ```{r} -->
+<!-- # path_to_indcvi <- insee.rp.data.2020::path_to_extdata("RP-detail/INDCVI/FD_INDCVIZA_2020.csv") -->
+<!-- # data_extracted_mapuce_2020 <- insee.rp::ins_extract_rp_col( -->
+<!-- #     file = path_to_indcvi, -->
+<!-- #     col_types = vars_rp_indcvi_for_mapuce_types, -->
+<!-- #     col_select = vars_rp_indcvi_for_mapuce_names -->
+<!-- #   ) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # muce_identify_entities_oo_models_dt(data_extracted_mapuce_2020) -->
+<!-- # # Erreur dans `[.data.table`(data_dt, !data_mapuce_dt, on = "iris_code", unique(iris_code),  :  -->
+<!-- # #   not-join '!' prefix is present on i but nomatch is provided. Please remove nomatch. -->
+<!-- ``` -->
+
+
+
+
+<!-- ```{r} -->
+<!-- # muce_identify_entities_oo_models(data_extracted_mapuce_2020, chunk_size = 1e6, n_workers = 2) -->
+<!-- # # Erreur dans { :  -->
+<!-- # # task 5 failed - "Join results in more than 2^31 rows (internal vecseq reached physical limit). Very likely misspecified join. Check for duplicate key values in i each of which join to the same group in x over and over again. If that's ok, try by=.EACHI to run j for each group to avoid the large allocation. Otherwise, please search for this error message in the FAQ, Wiki, Stack Overflow and data.table issue tracker for advice." -->
+<!-- ``` -->
+
